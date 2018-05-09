@@ -1,0 +1,180 @@
+---
+title: "Top 10 Asian Restaurants in Boston From YELP!"
+author: "CHEN HONG"
+date: "5/7/2018"
+output:
+  slidy_presentation: default
+  ioslides_presentation: default
+---
+
+```{r,message=F,echo=F,warning=F}
+library(tidyverse)
+library(httr)
+library(ggplot2)
+library(stringr)
+library("tm")
+library("SnowballC")
+library("RColorBrewer")
+library(wordcloud)
+library(leaflet)
+```
+
+```{r,message=F,echo=F,warning=F}
+#knitr::opts_chunk$set(echo = FALSE)
+# R version 3.4.4 (2018-03-15)
+
+
+
+yelp_result <- function(keyword, num_of_business){
+api_key <- "0cFq1_x0M3Th7jRukCHXdPlxXXdIg0OSP5YCN5sAARZMFEmgYKQdja8A8HpI8xRe51nC6-JCZjeGWUaZh92xrOFGKvKFITn5ENbiNkPkMqw_0wupzQTiQrIhsEvhWnYx"
+client_id <- "mkwzEaUHww2bepzeXx2JaqA"
+client_secret <- api_key
+
+response <- POST("https://api.yelp.com/oauth2/token",
+            body = list(grant_type = "client_credentials",
+                        client_id = client_id,
+                        client_secret = client_secret))
+
+#token <- content(response)$access_token
+
+
+# extrat the data from YELP
+yelp <- "https://api.yelp.com"
+term <- keyword
+location <- "Boston, MA"
+categories <- NULL
+limit <- num_of_business
+radius <- 8000
+url <- modify_url(yelp, path = c("v3", "businesses", "search"),
+                  query = list(term = term, location = location, 
+                               limit = limit,
+                               radius = radius))
+res <- GET(url, add_headers(Authorization = paste("Bearer", api_key)))
+return(content(res))
+}
+
+
+
+yelp_summary_in_dataframe <- function(results) {
+rows = length(results$business)
+result_df <- data.frame(matrix(nrow = rows, ncol = 7))
+colnames(result_df) <- c("name", "price", "rating","review", "c1", "c2", "c3")
+for (i in 1:rows) {
+  result_df[i, 1] <- results$business[[i]]$name
+  result_df[i, 2] <- results$business[[i]]$price
+  result_df[i, 3] <- results$business[[i]]$rating
+  result_df[i, 4] <- results$business[[i]]$review_count
+  cat_column_index <- 5
+  for(num in 1:length(results$business[[i]]$categories)) {
+    result_df[i, cat_column_index] <- results$business[[i]]$categories[[num]]$title
+    cat_column_index <- cat_column_index + 1
+  }
+}
+return(result_df)
+}
+
+get_average <- function(df_col){
+  return(mean(df_col))
+}
+
+
+category_word_colud <- function(dataframe){
+  dataframe$c1 <- paste(dataframe$c1, dataframe$c2, dataframe$c3)
+  ##str(dataframe$c1)
+  wordcloud(words = dataframe$c1, 
+            min.freq=1, 
+            random.order = FALSE,
+            rot.per=.5,colors=brewer.pal(8, "Dark2"))
+}
+
+
+```
+
+## Top 10 Asian Restaurants in Boston 
+This realtime Data is extraced from YELP! with lists information of 50 restaurants of their reviews, ranking , location and price levels. I use the criteria of price, ranking , number of reviews etc and filter out the top 10 asian restaurants in boston. and made a geographical map with location marks tagged with restaurants details. 
+
+
+
+
+## The 50 asian restaurants in boston with a radius 8000 
+
+- Asian Restaurants 
+- Price & Rating Statistic Relationship
+- Filtered out top 10 and map info 
+
+## Collection of 50 Asian Restaurants with radius 8000 centerd Boston 
+- the word cloud with frequency 
+
+```{r,message=F,echo=F,warning=F}
+df <- read_csv("df1.csv")
+rating_avg <- get_average(df$rating)
+review_avg <- get_average(df$review)
+is.numeric(df$review_count)
+category_word_colud(df)
+
+```
+
+## The Statistic Relation Between Rating and Price
+
+```{r,message=F,echo=F,warning=F}
+rating <- df$rating
+price <- df$price
+pricen<- str_length(price)
+is.numeric(pricen)
+### the regression between the price and the rating 
+
+
+model <- lm(pricen~rating)
+summary(model)
+anova(model)
+cor(pricen,rating)
+
+```
+
+## Bar Plot of the Cuisines Types
+the above is the barplot of the cuisines categories. we can apparently notice that Asian Fusion 
+is the most frequently served, to be more specific, the sushi bars, chinese cuisines, thai 
+japeanses and ramen are most ofter served.
+
+
+```{r,message=F,echo=F,warning=F}
+category_df <- df[c("c1", "c2", "c3")]
+View(category_df)
+as.data.frame(category_df)
+df_c1 <- category_df[c("c1")]
+colnames(df_c1) <- c("cat")
+df_c2 <- category_df[c("c2")]
+colnames(df_c2) <- c("cat")
+df_c3 <- category_df[c("c3")]
+colnames(df_c3) <- c("cat")
+category150 <- rbind(df_c1, df_c2, df_c3)
+View(category150)
+
+
+cat_freq_bar_chart <- function(cat_df){
+freq_list <- as.data.frame(table(unlist(cat_df)))
+colnames(freq_list) <- c("category", "frequency")
+data <- data.frame(
+  category=freq_list$category,
+  frequency=freq_list$frequency
+)
+
+data %>%
+  mutate(name = fct_reorder(category, frequency)) %>%
+  ggplot( aes(x=category, y=frequency)) +
+  geom_bar(stat="identity") +
+  coord_flip()
+}
+
+cat_freq_bar_chart(category150)
+
+```
+
+## top 10 Asian Retaurants in Boston 
+After filter by the average rating and price level, here are top 10 consumer-friednly restaurants in Boston 
+
+```{r,message=F,echo=F,warning=F}
+top <- df %>% filter(rating > rating_avg) %>% filter(review > review_avg)
+top
+
+```
